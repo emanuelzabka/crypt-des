@@ -143,8 +143,8 @@ func processArgs() {
 }
 
 func prepareKey() (result []byte) {
-	rand.Seed(time.Now().UnixNano())
 	if keyString == "" {
+		rand.Seed(time.Now().UnixNano())
 		result = make([]byte, 8)
 		for i := range result {
 			result[i] = byte(rand.Intn(256))
@@ -171,32 +171,13 @@ func permutate(block []byte, permutationMatrix []int) (result []byte) {
 	for i := 0; i < len(permutationMatrix); i++ {
 		resByteIndex := i >> 3
 		resBitIndex := i - (resByteIndex << 3)
-
 		blockByteIndex := (permutationMatrix[i] - 1) >> 3
 		blockBitIndex := (permutationMatrix[i] - 1) - (blockByteIndex << 3)
 		blockByte := block[blockByteIndex]
 		resByte := result[resByteIndex]
-
 		var bit byte = (0x01 & (blockByte >> uint(7-blockBitIndex))) << uint(7-resBitIndex)
-
 		result[resByteIndex] = (resByte & ^(0x01 << uint(7-resBitIndex))) | bit
 	}
-	/*
-		for i := 0; i < len(permutationMatrix); i++ {
-			byte1Index := i >> 3
-			bit1Index := i - (byte1Index << 3)
-			byte2Index := (permutationMatrix[i] - 1) >> 3
-			bit2Index := (permutationMatrix[i] - 1) - (byte2Index << 3)
-			byte1 := block[byte1Index]
-			byte2 := block[byte2Index]
-
-			var bit1 byte = (0x01 & (byte1 >> uint(7 - bit1Index))) << uint(7 - bit2Index)
-			var bit2 byte = (0x01 & (byte2 >> uint(7 - bit2Index))) << uint(7 - bit1Index)
-
-			block[byte1Index] = (byte1 & ^(0x01 << uint(7 - bit1Index))) | bit2
-			block[byte2Index] = (byte2 & ^(0x01 << uint(7 - bit2Index))) | bit1
-		}
-	*/
 	return result
 }
 
@@ -267,20 +248,64 @@ func getNextDataBlock() (result []byte) {
 
 func xorBlocks(block1 []byte, block2 []byte) (result []byte) {
 	result = make([]byte, len(block1))
-	for i := range(block1) {
+	for i := range block1 {
 		result[i] = block1[i] ^ block2[i]
 	}
 	return result
 }
 
-func encryptBlock(key []byte, block []byte) (result []byte) {
+func getBit(block []byte, pos int) (result byte) {
+	posByte := pos >> 3
+	posBit := pos - posByte<<3
+	result = 0x01 & (block[posByte] >> (7 - uint(posBit)))
+	return result
+}
+
+func getSBoxValue(block []byte, step int) (result byte) {
+	beginPos := step * 6
+	endPos := beginPos + 5
+	var col byte
+	var row byte
+
+	row = (getBit(block, beginPos) << 1) | (getBit(block, endPos))
+	col =
+		(getBit(block, beginPos+1) << 3) |
+			(getBit(block, beginPos+2) << 2) |
+			(getBit(block, beginPos+3) << 1) |
+			getBit(block, beginPos+4)
+	result = byte(sboxes[step][row*16+col])
+	return result
+}
+
+func applySBoxes(block []byte) (result []byte) {
+	result = make([]byte, 4)
+	for i := 0; i < 8; i += 2 {
+		leftNibble := getSBoxValue(result, i)
+		rightNibble := getSBoxValue(result, i+1)
+		result[i>>1] = leftNibble<<4 | rightNibble
+	}
+	return result
+}
+
+func feistelFunction(key []byte, block []byte) (result []byte) {
+	expandedBlock := permutate(block, expansionPermutation)
+	expandedBlock = xorBlocks(expandedBlock, key)
+	transformedBlock := applySBoxes(expandedBlock)
+	result = permutate(transformedBlock, pBoxPermutation)
+	return result
+}
+
+func encryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
+	block = permutate(block, initialPermutation)
 	left := block[0:4]
 	right := block[3:]
-	expandedRight := permutate(right, expansionPermutation)
-	right = xorBlocks(expandedRight, key)
-	result = append(left, right...)
-	// s-box
-	// p-box
+	for k := range roundKeys {
+		lastRight := right
+		transformedRight := feistelFunction(roundKeys[k], right)
+		right = xorBlocks(left, transformedRight)
+		left = lastRight
+	}
+	result = permutate(append(right, left...), finalPermutation)
 	return result
 }
 
@@ -292,7 +317,6 @@ func main() {
 	fmt.Printf("Using key: %s\n", blockToHexString(key))
 	roundKeys := generateRoundKeys(key)
 	data := getNextDataBlock()
-	for k := range(roundKeys) {
-		data = encryptBlock(roundKeys[k], data)
-	}
+	encryptedData := encryptBlock(data, roundKeys)
+	fmt.Println(encryptedData)
 }
