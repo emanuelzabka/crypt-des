@@ -242,7 +242,7 @@ func generateRoundKeys(key []byte) (result [][]byte) {
 }
 
 func getNextDataBlock() (result []byte) {
-	result, _ = hex.DecodeString("ff00ff00ff00ff00")
+	result, _ = hex.DecodeString("fa00fb00fc00fd01")
 	return result
 }
 
@@ -280,8 +280,8 @@ func getSBoxValue(block []byte, step int) (result byte) {
 func applySBoxes(block []byte) (result []byte) {
 	result = make([]byte, 4)
 	for i := 0; i < 8; i += 2 {
-		leftNibble := getSBoxValue(result, i)
-		rightNibble := getSBoxValue(result, i+1)
+		leftNibble := getSBoxValue(block, i)
+		rightNibble := getSBoxValue(block, i+1)
 		result[i>>1] = leftNibble<<4 | rightNibble
 	}
 	return result
@@ -298,7 +298,7 @@ func feistelFunction(key []byte, block []byte) (result []byte) {
 func encryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
 	block = permutate(block, initialPermutation)
 	left := block[0:4]
-	right := block[3:]
+	right := block[4:]
 	for k := range roundKeys {
 		lastRight := right
 		transformedRight := feistelFunction(roundKeys[k], right)
@@ -311,7 +311,7 @@ func encryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
 
 func decryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
 	invertedKeys := make([][]byte, len(roundKeys))
-	for i, j := len(roundKeys)-1, 0; i >= 0; i, j = i-1, i+1 {
+	for i, j := len(roundKeys)-1, 0; i >= 0; i, j = i-1, j+1 {
 		invertedKeys[j] = roundKeys[i]
 	}
 	return encryptBlock(block, invertedKeys)
