@@ -309,6 +309,14 @@ func encryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
 	return result
 }
 
+func decryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
+	invertedKeys := make([][]byte, len(roundKeys))
+	for i, j := len(roundKeys)-1, 0; i >= 0; i, j = i-1, i+1 {
+		invertedKeys[j] = roundKeys[i]
+	}
+	return encryptBlock(block, invertedKeys)
+}
+
 func main() {
 	// @TODO Suportar standard input
 	// @TODO Suportar standard output
@@ -317,6 +325,9 @@ func main() {
 	fmt.Printf("Using key: %s\n", blockToHexString(key))
 	roundKeys := generateRoundKeys(key)
 	data := getNextDataBlock()
+	fmt.Println(data)
 	encryptedData := encryptBlock(data, roundKeys)
 	fmt.Println(encryptedData)
+	decryptedData := decryptBlock(encryptedData, roundKeys)
+	fmt.Println(decryptedData)
 }
