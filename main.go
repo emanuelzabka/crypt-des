@@ -1,9 +1,12 @@
 package main
 
 import (
+	"./des"
+	"bufio"
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"time"
@@ -14,138 +17,60 @@ const (
 	DECRYPT
 )
 
-var initialPermutation []int = []int{
-	58, 50, 42, 34, 26, 18, 10, 2, 60, 52, 44, 36, 28, 20, 12, 4,
-	62, 54, 46, 38, 30, 22, 14, 6, 64, 56, 48, 40, 32, 24, 16, 8,
-	57, 49, 41, 33, 25, 17, 9, 1, 59, 51, 43, 35, 27, 19, 11, 3,
-	61, 53, 45, 37, 29, 21, 13, 5, 63, 55, 47, 39, 31, 23, 15, 7,
-}
+const BLOCK_SIZE = 8
 
-var finalPermutation []int = []int{
-	40, 8, 48, 16, 56, 24, 64, 32, 39, 7, 47, 15, 55, 23, 63, 31,
-	38, 6, 46, 14, 54, 22, 62, 30, 37, 5, 45, 13, 53, 21, 61, 29,
-	36, 4, 44, 12, 52, 20, 60, 28, 35, 3, 43, 11, 51, 19, 59, 27,
-	34, 2, 42, 10, 50, 18, 58, 26, 33, 1, 41, 9, 49, 17, 57, 25,
-}
-
-var keyPermutation []int = []int{
-	57, 49, 41, 33, 25, 17, 9, 1, 58, 50, 42, 34, 26, 18,
-	10, 2, 59, 51, 43, 35, 27, 19, 11, 3, 60, 52, 44, 36,
-	63, 55, 47, 39, 31, 23, 15, 7, 62, 54, 46, 38, 30, 22,
-	14, 6, 61, 53, 45, 37, 29, 21, 13, 5, 28, 20, 12, 4,
-}
-
-var keyShiftsPerRound []int = []int{
-	1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1,
-}
-
-var compressionPermutation []int = []int{
-	14, 17, 11, 24, 1, 5, 3, 28, 15, 6, 21, 10,
-	23, 19, 12, 4, 26, 8, 16, 7, 27, 20, 13, 2,
-	41, 52, 31, 37, 47, 55, 30, 40, 51, 45, 33, 48,
-	44, 49, 39, 56, 34, 53, 46, 42, 50, 36, 29, 32,
-}
-
-var expansionPermutation []int = []int{
-	32, 1, 2, 3, 4, 5, 4, 5, 6, 7, 8, 9,
-	8, 9, 10, 11, 12, 13, 12, 13, 14, 15, 16, 17,
-	16, 17, 18, 19, 20, 21, 20, 21, 22, 23, 24, 25,
-	24, 25, 26, 27, 28, 29, 28, 29, 30, 31, 32, 1,
-}
-
-var sboxes [][]int = [][]int{
-	{
-		14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7,
-		0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11, 9, 5, 3, 8,
-		4, 1, 14, 8, 13, 6, 2, 11, 15, 12, 9, 7, 3, 10, 5, 0,
-		15, 12, 8, 2, 4, 9, 1, 7, 5, 11, 3, 14, 10, 0, 6, 13,
-	},
-	{
-		15, 1, 8, 14, 6, 11, 3, 4, 9, 7, 2, 13, 12, 0, 5, 10,
-		3, 13, 4, 7, 15, 2, 8, 14, 12, 0, 1, 10, 6, 9, 11, 5,
-		0, 14, 7, 11, 10, 4, 13, 1, 5, 8, 12, 6, 9, 3, 2, 15,
-		13, 8, 10, 1, 3, 15, 4, 2, 11, 6, 7, 12, 0, 5, 14, 9,
-	},
-	{
-		10, 0, 9, 14, 6, 3, 15, 5, 1, 13, 12, 7, 11, 4, 2, 8,
-		13, 7, 0, 9, 3, 4, 6, 10, 2, 8, 5, 14, 12, 11, 15, 1,
-		13, 6, 4, 9, 8, 15, 3, 0, 11, 1, 2, 12, 5, 10, 14, 7,
-		1, 10, 13, 0, 6, 9, 8, 7, 4, 15, 14, 3, 11, 5, 2, 12,
-	},
-	{
-		7, 13, 14, 3, 0, 6, 9, 10, 1, 2, 8, 5, 11, 12, 4, 15,
-		13, 8, 11, 5, 6, 15, 0, 3, 4, 7, 2, 12, 1, 10, 14, 9,
-		10, 6, 9, 0, 12, 11, 7, 13, 15, 1, 3, 14, 5, 2, 8, 4,
-		3, 15, 0, 6, 10, 1, 13, 8, 9, 4, 5, 11, 12, 7, 2, 14,
-	},
-	{
-		2, 12, 4, 1, 7, 10, 11, 6, 8, 5, 3, 15, 13, 0, 14, 9,
-		14, 11, 2, 12, 4, 7, 13, 1, 5, 0, 15, 10, 3, 9, 8, 6,
-		4, 2, 1, 11, 10, 13, 7, 8, 15, 9, 12, 5, 6, 3, 0, 14,
-		11, 8, 12, 7, 1, 14, 2, 13, 6, 15, 0, 9, 10, 4, 5, 3,
-	},
-	{
-		12, 1, 10, 15, 9, 2, 6, 8, 0, 13, 3, 4, 14, 7, 5, 11,
-		10, 15, 4, 2, 7, 12, 9, 5, 6, 1, 13, 14, 0, 11, 3, 8,
-		9, 14, 15, 5, 2, 8, 12, 3, 7, 0, 4, 10, 1, 13, 11, 6,
-		4, 3, 2, 12, 9, 5, 15, 10, 11, 14, 1, 7, 6, 0, 8, 13,
-	},
-	{
-		4, 11, 2, 14, 15, 0, 8, 13, 3, 12, 9, 7, 5, 10, 6, 1,
-		13, 0, 11, 7, 4, 9, 1, 10, 14, 3, 5, 12, 2, 15, 8, 6,
-		1, 4, 11, 13, 12, 3, 7, 14, 10, 15, 6, 8, 0, 5, 9, 2,
-		6, 11, 13, 8, 1, 4, 10, 7, 9, 5, 0, 15, 14, 2, 3, 12,
-	},
-	{
-		13, 2, 8, 4, 6, 15, 11, 1, 10, 9, 3, 14, 5, 0, 12, 7,
-		1, 15, 13, 8, 10, 3, 7, 4, 12, 5, 6, 11, 0, 14, 9, 2,
-		7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13, 15, 3, 5, 8,
-		2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11,
-	},
-}
-
-var pBoxPermutation []int = []int{
-	16, 7, 20, 21, 29, 12, 28, 17, 1, 15, 23, 26, 5, 18, 31, 10,
-	2, 8, 24, 14, 32, 27, 3, 9, 19, 13, 30, 6, 22, 11, 4, 25,
-}
-
-var inputFile string
-var outputFile string
+var inputReader *bufio.Reader
+var inputFile *os.File
+var outputWriter *bufio.Writer
+var outputFile *os.File
+var inputParam string
+var outputParam string
 var keyString string
 var operation int
 
-func processArgs() {
-	encrypt := flag.Bool("encrypt", false, "Encrypt input")
-	decrypt := flag.Bool("decrypt", false, "Decrypt input")
-	inputParam := flag.String("i", "", "Input file to encrypt/decrypt")
-	outputParam := flag.String("o", "", "Output file")
-	keyParam := flag.String("k", "", "Cipher key")
+func readArgs() {
+	var encrypt, decrypt bool
+	flag.BoolVar(&encrypt, "encrypt", false, "Encrypt input")
+	flag.BoolVar(&decrypt, "decrypt", false, "Decrypt input")
+	flag.StringVar(&inputParam, "i", "", "Input file to encrypt/decrypt. Use \"-\" to standard input")
+	flag.StringVar(&outputParam, "o", "", "Output file. Use \"-\" to standard output")
+	flag.StringVar(&keyString, "k", "", "Cipher key")
 	flag.Parse()
-	if !*encrypt && !*decrypt || *encrypt {
+	if !encrypt && !decrypt || encrypt {
 		operation = ENCRYPT
 	} else {
 		operation = DECRYPT
 	}
-	if *keyParam == "" && operation == DECRYPT {
-		fmt.Println("Cipher key is required")
+	if keyString == "" && operation == DECRYPT {
+		fmt.Fprintln(os.Stderr, "Cipher key is required")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
-	if *encrypt && *decrypt {
-		fmt.Println("Choose between only one of -encrypt or -decrypt operations")
+	if encrypt && decrypt {
+		fmt.Fprintln(os.Stderr, "Choose between only one of -encrypt or -decrypt operations")
 		os.Exit(1)
 	}
-	keyString = *keyParam
-	inputFile = *inputParam
-	outputFile = *outputParam
-	fmt.Println(inputFile)
-	fmt.Println(outputFile)
+	if inputParam == "" {
+		inputParam = "-"
+	}
+	if outputParam == "" {
+		outputParam = "-"
+	}
+}
+
+func validateArgs() {
+	// Input is readable
+	if inputParam != "-" {
+		if _, err := os.Stat(inputParam); os.IsNotExist(err) {
+			fmt.Fprintln(os.Stderr, "Error: Input file not found")
+		}
+	}
 }
 
 func prepareKey() (result []byte) {
 	if keyString == "" {
 		rand.Seed(time.Now().UnixNano())
-		result = make([]byte, 8)
+		result = make([]byte, BLOCK_SIZE)
 		for i := range result {
 			result[i] = byte(rand.Intn(256))
 		}
@@ -166,168 +91,122 @@ func blockToHexString(block []byte) string {
 	return hex.EncodeToString(block)
 }
 
-func permutate(block []byte, permutationMatrix []int) (result []byte) {
-	result = make([]byte, len(permutationMatrix)>>3)
-	for i := 0; i < len(permutationMatrix); i++ {
-		resByteIndex := i >> 3
-		resBitIndex := i - (resByteIndex << 3)
-		blockByteIndex := (permutationMatrix[i] - 1) >> 3
-		blockBitIndex := (permutationMatrix[i] - 1) - (blockByteIndex << 3)
-		blockByte := block[blockByteIndex]
-		resByte := result[resByteIndex]
-		var bit byte = (0x01 & (blockByte >> uint(7-blockBitIndex))) << uint(7-resBitIndex)
-		result[resByteIndex] = (resByte & ^(0x01 << uint(7-resBitIndex))) | bit
+func checkInputReader() {
+	if inputReader != nil {
+		return
 	}
-	return result
-}
-
-func key64To56(key []byte) (result []byte) {
-	result = permutate(key, keyPermutation)
-	return result
-}
-
-func leftRoundShift(block []byte, shift int, beginOffset int, endOffset int) (result []byte) {
-	result = make([]byte, len(block))
-	copy(result, block)
-	if endOffset > 0 {
-		result[len(block)-1] = result[len(block)-1] & (0xff << uint(endOffset))
-	}
-	for i := 0; i < shift; i++ {
-		var leading byte = 0x00
-		for j := len(result) - 1; j >= 0; j-- {
-			var nextLeading byte = (result[j] & 0x80) >> 7
-			result[j] = (result[j] << 1) | leading
-			leading = nextLeading
+	if inputParam != "-" {
+		file, err := os.Open(inputParam)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening input file: %s\n", err.Error())
+			os.Exit(1)
 		}
-		if endOffset > 0 {
-			result[len(result)-1] = result[len(result)-1] | (leading << uint(endOffset))
+		inputFile = file
+		inputReader = bufio.NewReader(file)
+	} else {
+		inputReader = bufio.NewReader(os.Stdin)
+	}
+}
+
+func getNextInputBlock(block []byte) (end bool, size int, pad int) {
+	end = false
+	pad = 0
+	checkInputReader()
+	size, err := inputReader.Read(block)
+	if err == io.EOF {
+		end = true
+	} else if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading input file: %s\n", err.Error())
+		os.Exit(1)
+	}
+	if size != BLOCK_SIZE {
+		if operation == DECRYPT {
+			pad = int(block[0])
 		} else {
-			result[len(result)-1] = result[len(result)-1] | leading
+			pad = BLOCK_SIZE - size
 		}
 	}
-	return result
+	return end, size, pad
 }
 
-func joinKeys(left []byte, right []byte) (result []byte) {
-	result = make([]byte, 7)
-	for i := 0; i < 3; i++ {
-		result[i] = left[i]
+func checkOutputWriter() {
+	if outputWriter != nil {
+		return
 	}
-	result[3] = (left[3] & 0xf0) | (0x0f & right[0])
-	for i := 1; i < 4; i++ {
-		result[3+i] = right[i]
+	if outputParam != "-" {
+		file, err := os.OpenFile(outputParam, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening output file: %s\n", err.Error())
+			os.Exit(1)
+		}
+		outputFile = file
+		outputWriter = bufio.NewWriter(file)
+	} else {
+		outputWriter = bufio.NewWriter(os.Stdout)
 	}
-	return result
 }
 
-func getRoundSubkey(key []byte, round int) (result []byte) {
-	var left []byte = make([]byte, 4)
-	var right []byte = make([]byte, 4)
-	copy(left, key[0:4])
-	copy(right, key[3:])
-	left = leftRoundShift(left, keyShiftsPerRound[round], 0, 4)
-	right = leftRoundShift(right, keyShiftsPerRound[round], 4, 0)
-	shiftedKey := joinKeys(left, right)
-	result = permutate(shiftedKey, compressionPermutation)
-	return result
-}
-
-func generateRoundKeys(key []byte) (result [][]byte) {
-	transformedKey := key64To56(key)
-	result = make([][]byte, 16)
-	for i := 0; i < 16; i++ {
-		result[i] = getRoundSubkey(transformedKey, i)
+func writeToOutput(block []byte, pad int) {
+	checkOutputWriter()
+	var err error
+	if pad == 0 || operation != ENCRYPT {
+		_, err = outputWriter.Write(block)
+	} else {
+		buff := make([]byte, BLOCK_SIZE+1)
+		copy(buff, block)
+		buff[len(buff)-1] = byte(pad)
+		_, err = outputWriter.Write(buff)
 	}
-	return result
-}
-
-func getNextDataBlock() (result []byte) {
-	result, _ = hex.DecodeString("fa00fb00fc00fd01")
-	return result
-}
-
-func xorBlocks(block1 []byte, block2 []byte) (result []byte) {
-	result = make([]byte, len(block1))
-	for i := range block1 {
-		result[i] = block1[i] ^ block2[i]
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing output: %s\n", err.Error())
+		os.Exit(1)
 	}
-	return result
-}
-
-func getBit(block []byte, pos int) (result byte) {
-	posByte := pos >> 3
-	posBit := pos - posByte<<3
-	result = 0x01 & (block[posByte] >> (7 - uint(posBit)))
-	return result
-}
-
-func getSBoxValue(block []byte, step int) (result byte) {
-	beginPos := step * 6
-	endPos := beginPos + 5
-	var col byte
-	var row byte
-
-	row = (getBit(block, beginPos) << 1) | (getBit(block, endPos))
-	col =
-		(getBit(block, beginPos+1) << 3) |
-			(getBit(block, beginPos+2) << 2) |
-			(getBit(block, beginPos+3) << 1) |
-			getBit(block, beginPos+4)
-	result = byte(sboxes[step][row*16+col])
-	return result
-}
-
-func applySBoxes(block []byte) (result []byte) {
-	result = make([]byte, 4)
-	for i := 0; i < 8; i += 2 {
-		leftNibble := getSBoxValue(block, i)
-		rightNibble := getSBoxValue(block, i+1)
-		result[i>>1] = leftNibble<<4 | rightNibble
+	if outputParam == "-" {
+		outputWriter.Flush()
 	}
-	return result
 }
 
-func feistelFunction(key []byte, block []byte) (result []byte) {
-	expandedBlock := permutate(block, expansionPermutation)
-	expandedBlock = xorBlocks(expandedBlock, key)
-	transformedBlock := applySBoxes(expandedBlock)
-	result = permutate(transformedBlock, pBoxPermutation)
-	return result
-}
-
-func encryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
-	block = permutate(block, initialPermutation)
-	left := block[0:4]
-	right := block[4:]
-	for k := range roundKeys {
-		lastRight := right
-		transformedRight := feistelFunction(roundKeys[k], right)
-		right = xorBlocks(left, transformedRight)
-		left = lastRight
+func closeFiles() {
+	if inputFile != nil {
+		inputFile.Close()
 	}
-	result = permutate(append(right, left...), finalPermutation)
-	return result
-}
-
-func decryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
-	invertedKeys := make([][]byte, len(roundKeys))
-	for i, j := len(roundKeys)-1, 0; i >= 0; i, j = i-1, j+1 {
-		invertedKeys[j] = roundKeys[i]
+	if outputFile != nil {
+		outputFile.Close()
 	}
-	return encryptBlock(block, invertedKeys)
 }
 
 func main() {
-	// @TODO Suportar standard input
-	// @TODO Suportar standard output
-	processArgs()
+	defer closeFiles()
+	readArgs()
+	validateArgs()
 	key := prepareKey()
-	fmt.Printf("Using key: %s\n", blockToHexString(key))
-	roundKeys := generateRoundKeys(key)
-	data := getNextDataBlock()
-	fmt.Println(data)
-	encryptedData := encryptBlock(data, roundKeys)
-	fmt.Println(encryptedData)
-	decryptedData := decryptBlock(encryptedData, roundKeys)
-	fmt.Println(decryptedData)
+	if keyString == "" {
+		fmt.Fprintf(os.Stderr, "Using key: %s\n", blockToHexString(key))
+	}
+	end := false
+	size := 0
+	pad := 0
+	block := make([]byte, BLOCK_SIZE)
+	roundKeys := des.GenerateRoundKeys(key)
+	operationFunc := des.EncryptBlock
+	if operation == DECRYPT {
+		operationFunc = des.DecryptBlock
+	}
+	for !end {
+		end, size, pad = getNextInputBlock(block)
+		if size > 0 {
+			processedBlock := operationFunc(block, roundKeys)
+			if pad == 0 {
+				writeToOutput(processedBlock, 0)
+			} else {
+				if operation == ENCRYPT {
+					writeToOutput(processedBlock, pad)
+				} else {
+					lastBlock := make([]byte, BLOCK_SIZE-pad)
+					copy(lastBlock, processedBlock)
+					writeToOutput(lastBlock, 0)
+				}
+			}
+		}
+	}
 }
