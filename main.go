@@ -119,9 +119,10 @@ func getNextInputBlock(block []byte) (end bool, size int, pad int) {
 		fmt.Fprintf(os.Stderr, "Error reading input file: %s\n", err.Error())
 		os.Exit(1)
 	}
-	if size != BLOCK_SIZE {
+	if size > 0 && size != BLOCK_SIZE {
 		if operation == DECRYPT {
 			pad = int(block[0])
+			size = 0
 		} else {
 			pad = BLOCK_SIZE - size
 		}
@@ -149,13 +150,19 @@ func checkOutputWriter() {
 func writeToOutput(block []byte, pad int) {
 	checkOutputWriter()
 	var err error
-	if pad == 0 || operation != ENCRYPT {
+	if pad == 0 {
 		_, err = outputWriter.Write(block)
 	} else {
-		buff := make([]byte, BLOCK_SIZE+1)
-		copy(buff, block)
-		buff[len(buff)-1] = byte(pad)
-		_, err = outputWriter.Write(buff)
+		if operation == ENCRYPT {
+			buff := make([]byte, BLOCK_SIZE+1)
+			copy(buff, block)
+			buff[len(buff)-1] = byte(pad)
+			_, err = outputWriter.Write(buff)
+		} else {
+			buff := make([]byte, BLOCK_SIZE - pad)
+			copy(buff, block)
+			_, err = outputWriter.Write(buff)
+		}
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing output: %s\n", err.Error())
@@ -188,25 +195,30 @@ func main() {
 	pad := 0
 	block := make([]byte, BLOCK_SIZE)
 	roundKeys := des.GenerateRoundKeys(key)
-	operationFunc := des.EncryptBlock
-	if operation == DECRYPT {
-		operationFunc = des.DecryptBlock
-	}
-	for !end {
-		end, size, pad = getNextInputBlock(block)
-		if size > 0 {
-			processedBlock := operationFunc(block, roundKeys)
-			if pad == 0 {
-				writeToOutput(processedBlock, 0)
-			} else {
-				if operation == ENCRYPT {
-					writeToOutput(processedBlock, pad)
-				} else {
-					lastBlock := make([]byte, BLOCK_SIZE-pad)
-					copy(lastBlock, processedBlock)
-					writeToOutput(lastBlock, 0)
-				}
+	if operation == ENCRYPT {
+		for !end {
+			end, size, pad = getNextInputBlock(block)
+			if size > 0 {
+				processedBlock := des.EncryptBlock(block, roundKeys)
+				writeToOutput(processedBlock, pad)
 			}
+		}
+	} else {
+		var pendingBlock bool = false
+		var processedBlock []byte
+		for !end {
+			end, size, pad = getNextInputBlock(block)
+			if pendingBlock {
+				writeToOutput(processedBlock, pad)
+				pendingBlock = false
+			}
+			if size > 0 {
+				processedBlock = des.DecryptBlock(block, roundKeys)
+				pendingBlock = true
+			}
+		}
+		if pendingBlock {
+			writeToOutput(processedBlock, pad)
 		}
 	}
 }
