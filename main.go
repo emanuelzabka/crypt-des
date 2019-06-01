@@ -12,11 +12,6 @@ import (
 	"time"
 )
 
-const (
-	ENCRYPT = iota
-	DECRYPT
-)
-
 const BLOCK_SIZE = 8
 
 var inputReader *bufio.Reader
@@ -37,11 +32,11 @@ func readArgs() {
 	flag.StringVar(&keyString, "k", "", "Cipher key")
 	flag.Parse()
 	if !encrypt && !decrypt || encrypt {
-		operation = ENCRYPT
+		operation = des.ENCRYPT
 	} else {
-		operation = DECRYPT
+		operation = des.DECRYPT
 	}
-	if keyString == "" && operation == DECRYPT {
+	if keyString == "" && operation == des.DECRYPT {
 		fmt.Fprintln(os.Stderr, "Cipher key is required")
 		flag.PrintDefaults()
 		os.Exit(1)
@@ -120,7 +115,7 @@ func getNextInputBlock(block []byte) (end bool, size int, pad int) {
 		os.Exit(1)
 	}
 	if size > 0 && size != BLOCK_SIZE {
-		if operation == DECRYPT {
+		if operation == des.DECRYPT {
 			pad = int(block[0])
 			size = 0
 		} else {
@@ -153,13 +148,13 @@ func writeToOutput(block []byte, pad int) {
 	if pad == 0 {
 		_, err = outputWriter.Write(block)
 	} else {
-		if operation == ENCRYPT {
+		if operation == des.ENCRYPT {
 			buff := make([]byte, BLOCK_SIZE+1)
 			copy(buff, block)
 			buff[len(buff)-1] = byte(pad)
 			_, err = outputWriter.Write(buff)
 		} else {
-			buff := make([]byte, BLOCK_SIZE - pad)
+			buff := make([]byte, BLOCK_SIZE-pad)
 			copy(buff, block)
 			_, err = outputWriter.Write(buff)
 		}
@@ -194,12 +189,12 @@ func main() {
 	size := 0
 	pad := 0
 	block := make([]byte, BLOCK_SIZE)
-	roundKeys := des.GenerateRoundKeys(key)
-	if operation == ENCRYPT {
+	roundKeys := des.GenerateRoundsKeys(key, operation)
+	if operation == des.ENCRYPT {
 		for !end {
 			end, size, pad = getNextInputBlock(block)
 			if size > 0 {
-				processedBlock := des.EncryptBlock(block, roundKeys)
+				processedBlock := des.CipherBlock(block, roundKeys)
 				writeToOutput(processedBlock, pad)
 			}
 		}
@@ -213,7 +208,7 @@ func main() {
 				pendingBlock = false
 			}
 			if size > 0 {
-				processedBlock = des.DecryptBlock(block, roundKeys)
+				processedBlock = des.CipherBlock(block, roundKeys)
 				pendingBlock = true
 			}
 		}

@@ -1,5 +1,10 @@
 package des
 
+const (
+	ENCRYPT = iota
+	DECRYPT
+)
+
 var initialPermutation []int = []int{
 	58, 50, 42, 34, 26, 18, 10, 2, 60, 52, 44, 36, 28, 20, 12, 4,
 	62, 54, 46, 38, 30, 22, 14, 6, 64, 56, 48, 40, 32, 24, 16, 8,
@@ -210,16 +215,22 @@ func feistelFunction(key []byte, block []byte) (result []byte) {
 	return result
 }
 
-func GenerateRoundKeys(key []byte) (result [][]byte) {
+func GenerateRoundsKeys(key []byte, operation int) (result [][]byte) {
 	transformedKey := key64To56(key)
 	result = make([][]byte, 16)
-	for i := 0; i < 16; i++ {
-		result[i] = getRoundSubkey(transformedKey, i)
+	if operation == ENCRYPT {
+		for i := 0; i < 16; i++ {
+			result[i] = getRoundSubkey(transformedKey, i)
+		}
+	} else {
+		for i := 0; i < 16; i++ {
+			result[i] = getRoundSubkey(transformedKey, 15-i)
+		}
 	}
 	return result
 }
 
-func EncryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
+func CipherBlock(block []byte, roundKeys [][]byte) (result []byte) {
 	block = permutate(block, initialPermutation)
 	left := block[0:4]
 	right := block[4:]
@@ -231,12 +242,4 @@ func EncryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
 	}
 	result = permutate(append(right, left...), finalPermutation)
 	return result
-}
-
-func DecryptBlock(block []byte, roundKeys [][]byte) (result []byte) {
-	invertedKeys := make([][]byte, len(roundKeys))
-	for i, j := len(roundKeys)-1, 0; i >= 0; i, j = i-1, j+1 {
-		invertedKeys[j] = roundKeys[i]
-	}
-	return EncryptBlock(block, invertedKeys)
 }
