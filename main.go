@@ -169,6 +169,9 @@ func writeToOutput(block []byte, pad int) {
 }
 
 func closeFiles() {
+	if outputWriter != nil {
+		outputWriter.Flush()
+	}
 	if inputFile != nil {
 		inputFile.Close()
 	}
