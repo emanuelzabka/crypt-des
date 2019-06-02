@@ -33,5 +33,5 @@ cat encryptedfile | ./crypt-des -decrypt -k <key>
 
 ### Decrypt from file
 ```
-./crypt-des -encrypt -k <key> -i encryptedfile -o originalfile
+./crypt-des -decrypt -k <key> -i encryptedfile -o originalfile
 ```
