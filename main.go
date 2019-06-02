@@ -24,14 +24,19 @@ var keyString string
 var operation int
 
 func readArgs() {
-	var encrypt, decrypt, newKey bool
+	var encrypt, decrypt, newKey, help bool
 	flag.BoolVar(&encrypt, "encrypt", false, "Encrypt input")
 	flag.BoolVar(&decrypt, "decrypt", false, "Decrypt input")
-	flag.BoolVar(&newKey, "newkey", false, "Output a new key")
-	flag.StringVar(&inputParam, "i", "", "Input file to encrypt/decrypt. Use \"-\" to standard input")
-	flag.StringVar(&outputParam, "o", "", "Output file. Use \"-\" to standard output")
+	flag.BoolVar(&newKey, "newkey", false, "Outputs a new key")
+	flag.BoolVar(&help, "h", false, "Display help and exit")
+	flag.StringVar(&inputParam, "i", "", "Input file to encrypt/decrypt. Use \"-\" to standard input. Default \"-\"")
+	flag.StringVar(&outputParam, "o", "", "Output file. Use \"-\" to standard output. Default \"-\"")
 	flag.StringVar(&keyString, "k", "", "Cipher key")
 	flag.Parse()
+	if help {
+		flag.Usage()
+		os.Exit(0)
+	}
 	if newKey {
 		key := prepareKey()
 		fmt.Println(blockToHexString(key))
@@ -43,8 +48,8 @@ func readArgs() {
 		operation = des.DECRYPT
 	}
 	if keyString == "" && operation == des.DECRYPT {
-		fmt.Fprintln(os.Stderr, "Cipher key is required")
-		flag.PrintDefaults()
+		fmt.Fprintln(os.Stderr, "** Cipher key is required for operation decrypt")
+		flag.Usage()
 		os.Exit(1)
 	}
 	if encrypt && decrypt {
