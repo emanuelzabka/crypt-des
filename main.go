@@ -24,13 +24,19 @@ var keyString string
 var operation int
 
 func readArgs() {
-	var encrypt, decrypt bool
+	var encrypt, decrypt, newKey bool
 	flag.BoolVar(&encrypt, "encrypt", false, "Encrypt input")
 	flag.BoolVar(&decrypt, "decrypt", false, "Decrypt input")
+	flag.BoolVar(&newKey, "newkey", false, "Output a new key")
 	flag.StringVar(&inputParam, "i", "", "Input file to encrypt/decrypt. Use \"-\" to standard input")
 	flag.StringVar(&outputParam, "o", "", "Output file. Use \"-\" to standard output")
 	flag.StringVar(&keyString, "k", "", "Cipher key")
 	flag.Parse()
+	if newKey {
+		key := prepareKey()
+		fmt.Println(blockToHexString(key))
+		os.Exit(0)
+	}
 	if !encrypt && !decrypt || encrypt {
 		operation = des.ENCRYPT
 	} else {
@@ -75,7 +81,7 @@ func prepareKey() (result []byte) {
 		var err error
 		result, err = hex.DecodeString(keyString)
 		if err != nil {
-			fmt.Printf("Key %s is not a valid hexadecimal value")
+			fmt.Printf("Key %s is not a valid hexadecimal value", keyString)
 			os.Exit(1)
 		}
 	}
