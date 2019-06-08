@@ -100,17 +100,22 @@ var pBoxPermutation []int = []int{
 	2, 8, 24, 14, 32, 27, 3, 9, 19, 13, 30, 6, 22, 11, 4, 25,
 }
 
+func getBit(block []byte, pos int) (result byte) {
+	posByte := pos >> 3
+	 // pos mod 8 = pos & (pow(2, 3) - 1)
+	bitPos := pos & 7
+	result = 1 & (block[posByte] >> (7 - uint(bitPos)))
+	return result
+}
+
 func permutate(block []byte, permutationMatrix []int) (result []byte) {
 	result = make([]byte, len(permutationMatrix)>>3)
-	for i := 0; i < len(permutationMatrix); i++ {
+	for i := range permutationMatrix {
+		var bit byte = getBit(block, permutationMatrix[i]-1)
 		resByteIndex := i >> 3
-		resBitIndex := i - (resByteIndex << 3)
-		blockByteIndex := (permutationMatrix[i] - 1) >> 3
-		blockBitIndex := (permutationMatrix[i] - 1) - (blockByteIndex << 3)
-		blockByte := block[blockByteIndex]
-		resByte := result[resByteIndex]
-		var bit byte = (0x01 & (blockByte >> uint(7-blockBitIndex))) << uint(7-resBitIndex)
-		result[resByteIndex] = (resByte & ^(0x01 << uint(7-resBitIndex))) | bit
+		// i mod 8 = i & (pow(2, 3) - 1)
+		bitPos := i & 7
+		result[resByteIndex] |= (bit << (7 - uint(bitPos)))
 	}
 	return result
 }
@@ -174,13 +179,6 @@ func xorBlocks(block1 []byte, block2 []byte) (result []byte) {
 	return result
 }
 
-func getBit(block []byte, pos int) (result byte) {
-	posByte := pos >> 3
-	posBit := pos - posByte<<3
-	result = 0x01 & (block[posByte] >> (7 - uint(posBit)))
-	return result
-}
-
 func getSBoxValue(block []byte, step int) (result byte) {
 	beginPos := step * 6
 	endPos := beginPos + 5
@@ -209,9 +207,9 @@ func applySBoxes(block []byte) (result []byte) {
 
 func feistelFunction(key []byte, block []byte) (result []byte) {
 	expandedBlock := permutate(block, expansionPermutation)
-	expandedBlock = xorBlocks(expandedBlock, key)
-	transformedBlock := applySBoxes(expandedBlock)
-	result = permutate(transformedBlock, pBoxPermutation)
+	xoredBlock := xorBlocks(expandedBlock, key)
+	substitutedBlock := applySBoxes(xoredBlock)
+	result = permutate(substitutedBlock, pBoxPermutation)
 	return result
 }
 
