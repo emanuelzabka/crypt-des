@@ -191,6 +191,45 @@ func closeFiles() {
 	}
 }
 
+func encrypt(key []byte) {
+	roundKeys := des.GenerateRoundsKeys(key, des.ENCRYPT)
+	end := false
+	size := 0
+	pad := 0
+	block := make([]byte, BLOCK_SIZE)
+	for !end {
+		end, size, pad = getNextInputBlock(block)
+		if size > 0 {
+			processedBlock := des.CipherBlock(block, roundKeys)
+			writeToOutput(processedBlock, pad)
+		}
+	}
+}
+
+func decrypt(key []byte) {
+	end := false
+	size := 0
+	pad := 0
+	roundKeys := des.GenerateRoundsKeys(key, des.DECRYPT)
+	var pendingBlock bool = false
+	block := make([]byte, BLOCK_SIZE)
+	var processedBlock []byte
+	for !end {
+		end, size, pad = getNextInputBlock(block)
+		if pendingBlock {
+			writeToOutput(processedBlock, pad)
+			pendingBlock = false
+		}
+		if size > 0 {
+			processedBlock = des.CipherBlock(block, roundKeys)
+			pendingBlock = true
+		}
+	}
+	if pendingBlock {
+		writeToOutput(processedBlock, pad)
+	}
+}
+
 func main() {
 	defer closeFiles()
 	readArgs()
@@ -199,35 +238,9 @@ func main() {
 	if keyString == "" {
 		fmt.Fprintf(os.Stderr, "Using key: %s\n", blockToHexString(key))
 	}
-	end := false
-	size := 0
-	pad := 0
-	block := make([]byte, BLOCK_SIZE)
-	roundKeys := des.GenerateRoundsKeys(key, operation)
 	if operation == des.ENCRYPT {
-		for !end {
-			end, size, pad = getNextInputBlock(block)
-			if size > 0 {
-				processedBlock := des.CipherBlock(block, roundKeys)
-				writeToOutput(processedBlock, pad)
-			}
-		}
+		encrypt(key)
 	} else {
-		var pendingBlock bool = false
-		var processedBlock []byte
-		for !end {
-			end, size, pad = getNextInputBlock(block)
-			if pendingBlock {
-				writeToOutput(processedBlock, pad)
-				pendingBlock = false
-			}
-			if size > 0 {
-				processedBlock = des.CipherBlock(block, roundKeys)
-				pendingBlock = true
-			}
-		}
-		if pendingBlock {
-			writeToOutput(processedBlock, pad)
-		}
+		decrypt(key)
 	}
 }

@@ -102,7 +102,7 @@ var pBoxPermutation []int = []int{
 
 func getBit(block []byte, pos int) (result byte) {
 	posByte := pos >> 3
-	 // pos mod 8 = pos & (pow(2, 3) - 1)
+	// pos mod 8 = pos & (pow(2, 3) - 1)
 	bitPos := pos & 7
 	result = 1 & (block[posByte] >> (7 - uint(bitPos)))
 	return result
