@@ -2,7 +2,7 @@
 
 Basic implementation of the Data Encryption Standard (DES) cipher algorithm in GOLANG.
 
-Created for educational purposes, not optmized for large inputs.
+Created for educational purposes, not optimized for large inputs.
 
 ## Usage
 
