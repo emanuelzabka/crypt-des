@@ -213,22 +213,7 @@ func feistelFunction(key []byte, block []byte) (result []byte) {
 	return result
 }
 
-func GenerateRoundsKeys(key []byte, operation int) (result [][]byte) {
-	transformedKey := key64To56(key)
-	result = make([][]byte, 16)
-	if operation == ENCRYPT {
-		for i := 0; i < 16; i++ {
-			result[i] = getRoundSubkey(transformedKey, i)
-		}
-	} else {
-		for i := 0; i < 16; i++ {
-			result[i] = getRoundSubkey(transformedKey, 15-i)
-		}
-	}
-	return result
-}
-
-func CipherBlock(block []byte, roundKeys [][]byte) (result []byte) {
+func cipherStep(block []byte, roundKeys [][]byte) (result []byte) {
 	block = permutate(block, initialPermutation)
 	left := block[0:4]
 	right := block[4:]
@@ -239,5 +224,49 @@ func CipherBlock(block []byte, roundKeys [][]byte) (result []byte) {
 		left = lastRight
 	}
 	result = permutate(append(right, left...), finalPermutation)
+	return result
+}
+
+func GenerateRoundsKeys(keys [][]byte, operation int) (result [][][]byte) {
+	keyCount := 1
+	if len(keys) == 3 {
+		keyCount = 3
+	}
+	result = make([][][]byte, keyCount)
+	for k := 0; k < keyCount; k++ {
+		result[k] = make([][]byte, 16)
+		var key []byte
+		// Invert key order in decryption
+		if operation == DECRYPT {
+			key = keys[keyCount-k-1]
+		} else {
+			key = keys[k]
+		}
+		transformedKey := key64To56(key)
+		// Encription and k is even OR Decription and k is odd
+		if (operation == ENCRYPT && k & 1 == 0) || (operation == DECRYPT && k & 1 != 0) {
+			// Encryption round keys
+			for i := 0; i < 16; i++ {
+				result[k][i] = getRoundSubkey(transformedKey, i)
+			}
+		} else {
+			// Decryption round keys
+			for i := 0; i < 16; i++ {
+				result[k][i] = getRoundSubkey(transformedKey, 15-i)
+			}
+		}
+	}
+	return result
+}
+
+func CipherBlock(block []byte, roundKeys [][][]byte) (result []byte) {
+	if len(roundKeys) == 3 {
+		result = block
+		for i := 0; i < 3; i++ {
+			result = cipherStep(result, roundKeys[i])
+		}
+	} else {
+		result = cipherStep(block, roundKeys[0])
+	}
 	return result
 }

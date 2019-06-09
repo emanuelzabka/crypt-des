@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"os"
 	"time"
+	"strings"
 )
 
 const BLOCK_SIZE = 8
@@ -22,6 +23,7 @@ var inputParam string
 var outputParam string
 var keyString string
 var operation int
+var tripleDes bool
 
 func readArgs() {
 	var encrypt, decrypt, newKey, help bool
@@ -29,6 +31,7 @@ func readArgs() {
 	flag.BoolVar(&decrypt, "decrypt", false, "Decrypt input")
 	flag.BoolVar(&newKey, "newkey", false, "Outputs a new key")
 	flag.BoolVar(&help, "h", false, "Display help and exit")
+	flag.BoolVar(&tripleDes, "3des", false, "Encrypt/decrypt using Triple DES")
 	flag.StringVar(&inputParam, "i", "", "Input file to encrypt/decrypt. Use \"-\" to standard input. Default \"-\"")
 	flag.StringVar(&outputParam, "o", "", "Output file. Use \"-\" to standard output. Default \"-\"")
 	flag.StringVar(&keyString, "k", "", "Cipher key")
@@ -38,8 +41,8 @@ func readArgs() {
 		os.Exit(0)
 	}
 	if newKey {
-		key := prepareKey()
-		fmt.Println(blockToHexString(key))
+		keys := prepareKey()
+		fmt.Println(keysToString(keys))
 		os.Exit(0)
 	}
 	if !encrypt && !decrypt || encrypt {
@@ -73,21 +76,39 @@ func validateArgs() {
 	}
 }
 
-func prepareKey() (result []byte) {
+func prepareKey() (result [][]byte) {
+	keyCount := 1
+	if tripleDes {
+		keyCount = 3
+	}
+	result = make([][]byte, keyCount)
 	if keyString == "" {
 		rand.Seed(time.Now().UnixNano())
-		result = make([]byte, BLOCK_SIZE)
-		for i := range result {
-			result[i] = byte(rand.Intn(256))
+		for i := 0; i < keyCount; i++ {
+			result[i] = make([]byte, BLOCK_SIZE)
+			for j := range result[i] {
+				result[i][j] = byte(rand.Intn(256))
+			}
 		}
 	} else {
-		keyString = fmt.Sprintf("%016s", keyString)
-		keyString = keyString[0:16]
-		var err error
-		result, err = hex.DecodeString(keyString)
-		if err != nil {
-			fmt.Printf("Key %s is not a valid hexadecimal value", keyString)
+		splitedKey := strings.Split(keyString, ":")
+		if len(splitedKey) < keyCount {
+			fmt.Fprintf(os.Stderr, "Triple DES required three keys. Invalid value", keyString)
 			os.Exit(1)
+		}
+		if len(splitedKey) > keyCount {
+			fmt.Fprintf(os.Stderr, "Only one key allowed in DES. Use -3des to allow three keys using Triple DES\n")
+			os.Exit(1)
+		}
+		for k := range splitedKey {
+			key := fmt.Sprintf("%016s", splitedKey[k])
+			key = key[0:16]
+			var err error
+			result[k], err = hex.DecodeString(key)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Key %s is not a valid hexadecimal value", key)
+				os.Exit(1)
+			}
 		}
 	}
 	return result
@@ -95,6 +116,14 @@ func prepareKey() (result []byte) {
 
 func blockToHexString(block []byte) string {
 	return hex.EncodeToString(block)
+}
+
+func keysToString(keys [][]byte) string {
+	res := make([]string, len(keys))
+	for k := range keys {
+		res[k] = blockToHexString(keys[k])
+	}
+	return strings.Join(res, ":")
 }
 
 func checkInputReader() {
@@ -191,8 +220,8 @@ func closeFiles() {
 	}
 }
 
-func encrypt(key []byte) {
-	roundKeys := des.GenerateRoundsKeys(key, des.ENCRYPT)
+func encrypt(keys [][]byte) {
+	roundKeys := des.GenerateRoundsKeys(keys, des.ENCRYPT)
 	end := false
 	size := 0
 	pad := 0
@@ -206,11 +235,11 @@ func encrypt(key []byte) {
 	}
 }
 
-func decrypt(key []byte) {
+func decrypt(keys [][]byte) {
 	end := false
 	size := 0
 	pad := 0
-	roundKeys := des.GenerateRoundsKeys(key, des.DECRYPT)
+	roundKeys := des.GenerateRoundsKeys(keys, des.DECRYPT)
 	var pendingBlock bool = false
 	block := make([]byte, BLOCK_SIZE)
 	var processedBlock []byte
@@ -234,13 +263,13 @@ func main() {
 	defer closeFiles()
 	readArgs()
 	validateArgs()
-	key := prepareKey()
+	keys := prepareKey()
 	if keyString == "" {
-		fmt.Fprintf(os.Stderr, "Using key: %s\n", blockToHexString(key))
+		fmt.Fprintf(os.Stderr, "Using key: %s\n", keysToString(keys))
 	}
 	if operation == des.ENCRYPT {
-		encrypt(key)
+		encrypt(keys)
 	} else {
-		decrypt(key)
+		decrypt(keys)
 	}
 }
