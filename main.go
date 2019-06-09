@@ -81,8 +81,8 @@ func prepareKey() (result [][]byte) {
 	if tripleDes {
 		keyCount = 3
 	}
-	result = make([][]byte, keyCount)
 	if keyString == "" {
+		result = make([][]byte, keyCount)
 		rand.Seed(time.Now().UnixNano())
 		for i := 0; i < keyCount; i++ {
 			result[i] = make([]byte, BLOCK_SIZE)
@@ -93,13 +93,18 @@ func prepareKey() (result [][]byte) {
 	} else {
 		splitedKey := strings.Split(keyString, ":")
 		if len(splitedKey) < keyCount {
-			fmt.Fprintf(os.Stderr, "Triple DES required three keys. Invalid value", keyString)
+			fmt.Fprintln(os.Stderr, "Triple DES requires three keys")
 			os.Exit(1)
 		}
-		if len(splitedKey) > keyCount {
-			fmt.Fprintf(os.Stderr, "Only one key allowed in DES. Use -3des to allow three keys using Triple DES\n")
+		if len(splitedKey) == 3 {
+			tripleDes = true
+			keyCount = 3
+		}
+		if len(splitedKey) != keyCount {
+			fmt.Fprintln(os.Stderr, "Invalid key count. Allowed one or three keys")
 			os.Exit(1)
 		}
+		result = make([][]byte, keyCount)
 		for k := range splitedKey {
 			key := fmt.Sprintf("%016s", splitedKey[k])
 			key = key[0:16]
