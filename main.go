@@ -25,6 +25,13 @@ var keyString string
 var operation int
 var tripleDes bool
 
+func askForKey() string {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Fprintf(os.Stderr, "Enter key: ")
+	key, _ := reader.ReadString('\n')
+	return strings.Trim(key, "\n")
+}
+
 func readArgs() {
 	var encrypt, decrypt, newKey, help bool
 	flag.BoolVar(&encrypt, "encrypt", false, "Encrypt input")
@@ -50,11 +57,6 @@ func readArgs() {
 	} else {
 		operation = des.DECRYPT
 	}
-	if keyString == "" && operation == des.DECRYPT {
-		fmt.Fprintln(os.Stderr, "** Cipher key is required for operation decrypt")
-		flag.Usage()
-		os.Exit(1)
-	}
 	if encrypt && decrypt {
 		fmt.Fprintln(os.Stderr, "Choose between only one of -encrypt or -decrypt operations")
 		os.Exit(1)
@@ -64,6 +66,17 @@ func readArgs() {
 	}
 	if outputParam == "" {
 		outputParam = "-"
+	}
+	if keyString == "" && operation == des.DECRYPT {
+		// Request key from user if input is not standard input
+		if inputParam != "-" {
+			keyString = askForKey()
+		}
+		if keyString == "" {
+			fmt.Fprintln(os.Stderr, "** Cipher key is required for operation decrypt")
+			flag.Usage()
+			os.Exit(1)
+		}
 	}
 }
 
@@ -111,7 +124,7 @@ func prepareKey() (result [][]byte) {
 			var err error
 			result[k], err = hex.DecodeString(key)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Key %s is not a valid hexadecimal value", key)
+				fmt.Fprintf(os.Stderr, "Key %s is not a valid hexadecimal value\n", key)
 				os.Exit(1)
 			}
 		}

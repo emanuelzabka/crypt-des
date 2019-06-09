@@ -227,6 +227,11 @@ func cipherStep(block []byte, roundKeys [][]byte) (result []byte) {
 	return result
 }
 
+// GenerateRoundsKeys generates the key for the cipher
+// it receives the keys (one or three keys)
+// operation can be des.ENCRYPT or des.DECRYPT
+// this keys should be used in CipherBlock and the operation param is what decides if a encrypt or decrypt will be
+// processed by the CipherBlock function
 func GenerateRoundsKeys(keys [][]byte, operation int) (result [][][]byte) {
 	keyCount := 1
 	if len(keys) == 3 {
@@ -259,6 +264,9 @@ func GenerateRoundsKeys(keys [][]byte, operation int) (result [][][]byte) {
 	return result
 }
 
+// CipherBlock cipher a block using the roundKeys
+// roundKeys must be the return of GenerateRoundsKeys
+// If the length of roundKeys is 3 then Triple DES is applied, if not, only the first key is used
 func CipherBlock(block []byte, roundKeys [][][]byte) (result []byte) {
 	if len(roundKeys) == 3 {
 		result = block
