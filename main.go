@@ -7,9 +7,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math/rand"
+	"crypto/rand"
 	"os"
-	"time"
 	"strings"
 )
 
@@ -96,11 +95,12 @@ func prepareKey() (result [][]byte) {
 	}
 	if keyString == "" {
 		result = make([][]byte, keyCount)
-		rand.Seed(time.Now().UnixNano())
 		for i := 0; i < keyCount; i++ {
 			result[i] = make([]byte, BLOCK_SIZE)
-			for j := range result[i] {
-				result[i][j] = byte(rand.Intn(256))
+			_, err := rand.Read(result[i])
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Error generating key")
+				os.Exit(1)
 			}
 		}
 	} else {

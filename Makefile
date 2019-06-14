@@ -1,5 +1,5 @@
 .PHONY: clean build test
-SHELL = /bin/bash
+SHELL = /bin/sh
 
 build: crypt-des
 
